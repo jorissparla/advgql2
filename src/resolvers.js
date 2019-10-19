@@ -1,5 +1,8 @@
 const { authenticated, authorized } = require("./auth");
+const { PubSub, AuthenticationError } = require("apollo-server");
 const NEW_POST = "NEW_POST";
+
+const pubsub = new PubSub();
 
 /**
  * Anything Query / Mutation resolver
@@ -52,7 +55,7 @@ module.exports = {
       const existing = models.User.findOne({ email: input.email });
 
       if (existing) {
-        throw new Error("nope");
+        throw new AuthenticationError("nope");
       }
       const user = models.User.createOne({ ...input, verified: false, avatar: "http" });
       const token = createToken(user);
@@ -62,17 +65,22 @@ module.exports = {
       const user = models.User.findOne(input);
 
       if (!user) {
-        throw new Error("nope");
+        throw new AuthenticationError("Invalid email/password");
       }
 
       const token = createToken(user);
       return { token, user };
     }
   },
+  Subscription: {
+    newPost: {
+      subscribe: () => pubsub.asyncIterator(NEW_POST)
+    }
+  },
   User: {
     posts(root, _, { user, models }) {
       if (root.id !== user.id) {
-        throw new Error("nope");
+        throw new AuthenticationError("not yours");
       }
 
       return models.Post.findMany({ author: root.id });
